@@ -1,0 +1,92 @@
+# Superseded by website-pipeline/.github/workflows/state-forecast.yml
+# Kept for reference; job is disabled to avoid false-failure noise.
+# Run state-models forecast pipeline manually (or on schedule).
+# Requires: data/input/01_state-election-results.csv, 02_state-cabinets.csv, 03_federal-election-results.csv
+# Optional secret: POLLING_API_BASE (API base URL for v1/elections; default: https://api.fasttrack29.com)
+
+name: Run state forecast
+
+on:
+  workflow_dispatch:   # Manual run from Actions tab
+  # Uncomment to run on a schedule (e.g. weekly):
+  # schedule:
+  #   - cron: "0 8 * * 1"
+
+jobs:
+  forecast:
+    if: false  # superseded by website-pipeline state-forecast.yml
+    name: Build data & forecast
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write   # push outputs to branch "output"
+
+    env:
+      POLLING_API_BASE: ${{ secrets.POLLING_API_BASE || 'https://pollingapi-v2.onrender.com' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.3.2"
+          use-public-rspm: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libcurl4-openssl-dev
+
+      - name: Cache R packages
+        uses: actions/cache@v4
+        with:
+          path: ~/R/library
+          key: ${{ runner.os }}-r-${{ hashFiles('code/auxilary/packages.R') }}
+          restore-keys: |
+            ${{ runner.os }}-r-
+
+      - name: Set R compilation flags (suppress Stan/Eigen backtrace spam)
+        run: |
+          mkdir -p ~/.R
+          echo 'CXXFLAGS += -ftemplate-backtrace-limit=0' >> ~/.R/Makevars
+          echo 'CXX11FLAGS += -ftemplate-backtrace-limit=0' >> ~/.R/Makevars
+          echo 'PKG_CXXFLAGS += -ftemplate-backtrace-limit=0' >> ~/.R/Makevars
+          echo 'PKG_CXX11FLAGS += -ftemplate-backtrace-limit=0' >> ~/.R/Makevars
+
+      - name: Install R dependencies
+        run: |
+          echo "Installing R packages (rstan/rstanarm compile from source; can take 15-25 min on first run)..."
+          Rscript -e "
+          # Minimal set used by run_pipeline.R + 07_figures_forecast.R only
+          p_required <- c('dplyr','tidyr','ggplot2','lubridate','stringr','readr','httr','dlm','rstan','rstanarm','ggrepel','xtable','remotes')
+          p_to_install <- p_required[!(p_required %in% rownames(installed.packages()))]
+          if (length(p_to_install) > 0) install.packages(p_to_install, repos = 'https://cloud.r-project.org', Ncpus = 2)
+          "
+
+      - name: Run pipeline
+        run: Rscript run_pipeline.R
+
+      - name: Generate forecast figures
+        run: Rscript code/07_figures_forecast.R
+
+      - name: Upload forecast outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: forecast-outputs
+          path: |
+            data/output/
+            results/
+          if-no-files-found: ignore
+
+      # Push outputs to branch "output" for stable URLs (e.g. website, raw files)
+      - name: Push outputs to branch output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin output 2>/dev/null || true
+          git checkout -B output
+          git add -f data/output results
+          git diff --staged --quiet || git commit -m "Forecast outputs from run ${{ github.run_id }}"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} output

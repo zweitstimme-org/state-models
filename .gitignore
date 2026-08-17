@@ -1,0 +1,24 @@
+**/.Rproj.user
+**/.Rhistory
+**/.RData
+**/.Ruserdata
+**/.DS_Store
+*.Rproj
+Rplots.pdf
+
+# Generated pipeline outputs (rebuild with run_pipeline.R / run_everything.R)
+data/output/
+9_full-data/
+5_federal-elections/
+10_models/
+11_forecast-data/
+12_forecast/
+results/figures/
+results/tables/
+
+# Duplicate Finder / macOS copies
+**/* 2.csv
+**/* 2.Rdata
+**/* 2.RData
+**/* 2.rds
+**/* 2.RDS
