@@ -562,28 +562,40 @@ lead_days_from_last_polls <- function(elections_to_forecast,
     stop("lead_days_from_last_polls: no elections")
   }
   lands <- unique(sub("_.*", "", elections_to_forecast))
-  if (is.null(stand_by_land)) stand_by_land <- setNames(as.Date(character()), character())
+  # Named Date [[ fails on a missing land (empty vector after a fresh clone
+  # with no data/output/01_state-polls.csv). Keep a list while merging.
+  as_stand_list <- function(x) {
+    if (is.null(x) || !length(x)) return(list())
+    if (is.list(x)) return(x)
+    as.list(x)
+  }
+  stand_by_land <- as_stand_list(stand_by_land)
   if (!length(stand_by_land) && !is.null(polls_csv) && file.exists(polls_csv)) {
     polls <- tryCatch(utils::read.csv(polls_csv, stringsAsFactors = FALSE), error = function(e) NULL)
-    stand_by_land <- last_poll_dates_by_land(polls)
+    stand_by_land <- as_stand_list(last_poll_dates_by_land(polls))
   }
   # Always refresh Stand from API (+ optional DAWUM scrape) and keep the newer
   # of CSV vs live — otherwise a stale polls CSV pins lead days behind new polls.
   fetched <- fetch_last_state_poll_dates(lands, api_base = api_base)
   for (land in lands) {
-    live <- fetched[[land]]
+    live <- if (land %in% names(fetched)) fetched[[land]] else as.Date(NA)
     if (is.null(live) || is.na(live)) next
     prev <- stand_by_land[[land]]
     if (is.null(prev) || is.na(prev) || live > prev) {
-      stand_by_land[[land]] <- live
+      stand_by_land[[land]] <- as.Date(live)
     }
   }
+  stand_nms <- names(stand_by_land)
+  stand_by_land <- setNames(
+    as.Date(vapply(stand_by_land, function(d) as.character(as.Date(d)), character(1))),
+    stand_nms
+  )
   stand_by_land <- stand_by_land[!duplicated(names(stand_by_land))]
   fallback <- as.Date(Sys.Date())
   leads <- vapply(elections_to_forecast, function(eid) {
     land <- sub("_.*", "", eid)
     ed <- as.Date(sub(".*_", "", eid))
-    stand <- stand_by_land[[land]]
+    stand <- if (land %in% names(stand_by_land)) stand_by_land[[land]] else as.Date(NA)
     if (is.null(stand) || is.na(stand)) stand <- fallback
     as.numeric(ed - as.Date(stand))
   }, numeric(1))
