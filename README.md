@@ -11,14 +11,10 @@ This repo is the **state forecast computation** layer, not the website itself.
 ```mermaid
 flowchart LR
   POLL["Polling API<br/>api.zweitstimme.org"]
-  STATE["state-models
-fit + forecast + draws"]
-  PIPE["website-pipeline
-Stimmung + API assembly + publish"]
-  SRC["website-source
-Hugo source"]
-  SITE["website
-static output"]
+  STATE["state-models<br/>Landtag forecast computation"]
+  PIPE["website-pipeline<br/>Stimmung + API assembly + publish"]
+  SRC["website-source<br/>editable Hugo source"]
+  SITE["website<br/>built static output"]
 
   POLL --> STATE
   STATE --> PIPE
@@ -26,14 +22,24 @@ static output"]
   SRC --> SITE
 ```
 
-### Repository boundary
+## Repository boundary
 
-- **This repo** computes Landtag forecast artifacts and posterior draws
-- **`website-pipeline`** decides how those artifacts are turned into website/API JSON and when they are published
-- **`website-source`** contains editable content/templates
-- **`website`** contains only the built static site
+- **`state-models`** computes Landtag forecasts and posterior draws
+- **`website-pipeline`** runs Stimmung, assembles `/api/...`, and publishes to preview/live
+- **`website-source`** is the editable Hugo source used to build the live site
+- **`website`** is the compiled static output served by GitHub Pages
 
-Production runs currently start from `website-pipeline`, but architecturally this repo is the source of truth for the **forecast computation itself**.
+Architecturally this repo is the source of truth for the **forecast computation itself**. Website JSON, API files, and deploys are not produced here.
+
+## Deployment
+
+Production Landtag forecasts are **not** deployed from this repo. The GitHub Action under `.github/workflows/` is disabled.
+
+The daily/manual run lives in [website-pipeline](https://github.com/zweitstimme-org/website-pipeline): it clones this repo, runs `run_pipeline.R` (or the skip-estimate path), converts `fcst_state.Rdata` to `forecast_state_*.json` / draws JSON, then publishes into `website-source` → `website`.
+
+By default that pipeline should skip a rerun when no newer poll exists than the already published `last_poll_date` (override with `force_refresh=true` on the workflow).
+
+Generated files (`data/output/`, fitted RDS, figures) stay out of git. Rebuild them locally; live site JSON comes from website-pipeline.
 
 ## Run
 
@@ -62,8 +68,6 @@ Optional: `ELECTIONS_TO_FORECAST=st_2026-09-06,be_2026-09-20,mv_2026-09-20` and 
 - **data/input/** — election results and cabinet flags
 - **docs/forecast-bw-rp-2026/** — BW/RP 2026 methodology note
 - **run_pipeline.R** / **run_everything.R** — entry points
-
-The GitHub Action in `.github/workflows/` is disabled; production forecasts run from website-pipeline.
 
 ## Contact
 
