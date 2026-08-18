@@ -4,6 +4,37 @@ R + Stan (`rstanarm`) forecasts for German **Landtag** elections, used on [zweit
 
 Each forecast is **4,000** posterior simulations: `stan_glm(..., chains = 4, iter = 2000)` (default half warmup → 4 × 1,000 saved draws). `posterior_predict()` then produces one vote-share vector per draw; those 4,000 rows are the “Simulationen” on the website (point estimate = median, 5/6-interval = quantiles, scenario probabilities = share of draws).
 
+## Role in the stack
+
+This repo is the **state forecast computation** layer, not the website itself.
+
+```mermaid
+flowchart LR
+  POLL["Polling API<br/>api.zweitstimme.org"]
+  STATE["state-models
+fit + forecast + draws"]
+  PIPE["website-pipeline
+Stimmung + API assembly + publish"]
+  SRC["website-source
+Hugo source"]
+  SITE["website
+static output"]
+
+  POLL --> STATE
+  STATE --> PIPE
+  PIPE --> SRC
+  SRC --> SITE
+```
+
+### Repository boundary
+
+- **This repo** computes Landtag forecast artifacts and posterior draws
+- **`website-pipeline`** decides how those artifacts are turned into website/API JSON and when they are published
+- **`website-source`** contains editable content/templates
+- **`website`** contains only the built static site
+
+Production runs currently start from `website-pipeline`, but architecturally this repo is the source of truth for the **forecast computation itself**.
+
 ## Run
 
 From the repo root (needs R 4.4+, `rstanarm`, and packages in `code/auxilary/packages.R`):
